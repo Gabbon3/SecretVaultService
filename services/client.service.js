@@ -1,8 +1,9 @@
 import argon2 from 'argon2';
-import jwt from 'jsonwebtoken';
+
 import { Config } from '../config.js';
 import { Client } from '../models/client.js';
 import { ServerError } from '../helpers/serverError.js';
+import { JWT } from '../auth/jsonwebtoken.js';
 
 export class ClientService {
     static #jwtExpiresIn = '1h'; // 1 hour expiration for server-to-server tokens
@@ -72,14 +73,14 @@ export class ClientService {
         await client.update({ lastUsedAt: new Date() });
 
         // Generate JWT
-        const token = jwt.sign(
+        const token = await JWT.sign(
             { 
                 clientId: client.id,
                 roles: client.roles.split(',').filter(r => r),
                 permissions: client.permissions.split(',').filter(p => p)
             },
             Config.JWT_SIGN_KEY,
-            { expiresIn: ClientService.#jwtExpiresIn }
+            ClientService.#jwtExpiresIn
         );
 
         return {
@@ -110,20 +111,6 @@ export class ClientService {
             return affectedRows > 0;
         } catch (error) {
             throw new ServerError(`Failed to revoke client: ${error.message}`, 500);
-        }
-    }
-
-    /**
-     * Validates a JWT token
-     * @param {string} token - JWT token to validate
-     * @returns {Promise<{isValid: boolean, payload?: object}>} Validation result
-     */
-    async validateToken(token) {
-        try {
-            const payload = jwt.verify(token, Config.JWT_SIGN_KEY);
-            return { isValid: true, payload };
-        } catch (error) {
-            return { isValid: false };
         }
     }
 

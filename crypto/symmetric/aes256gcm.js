@@ -1,93 +1,128 @@
-import crypto from 'crypto';
-
 export class AES256GCM {
     /**
-     * Cifra i dati usando AES-256-GCM
-     * @param {Uint8Array} data - Dati da cifrare
-     * @param {Uint8Array} key - Chiave di cifratura (32 byte)
-     * @param {Uint8Array|null} aad - Dati aggiuntivi autenticati (opzionale)
-     * @returns {Promise<Uint8Array>} Dati cifrati nel formato [nonce (12 byte), encrypted data, auth tag (16 byte)]
+     * Generates a secure AES-GCM 256-bit key (non-exportable by default)
+     * @param {boolean} [exportable=false] - Whether the key can be exported
+     * @returns {Promise<CryptoKey>}
      */
-    static async encrypt(data, key, aad = null) {
-        if (key.length !== 32) {
-            throw new Error('La chiave AES-256-GCM deve essere di 32 byte (256 bit)');
-        }
-
-        // Genera un nonce casuale di 12 byte (96 bit) - raccomandato per GCM
-        const nonce = crypto.randomBytes(12);
-        
-        // Crea il cipher
-        const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce, {
-            authTagLength: 16 // Lunghezza standard dell'authentication tag per GCM
-        });
-
-        // Aggiungi AAD se fornito
-        if (aad) {
-            cipher.setAAD(aad);
-        }
-
-        // Cifra i dati
-        const encrypted = Buffer.concat([
-            cipher.update(data),
-            cipher.final()
-        ]);
-
-        // Ottieni l'authentication tag
-        const authTag = cipher.getAuthTag();
-
-        // Combina nonce, dati cifrati e auth tag in un unico buffer
-        return new Uint8Array(Buffer.concat([nonce, encrypted, authTag]));
+    static async generateKey(exportable = false) {
+        return await crypto.subtle.generateKey(
+            {
+                name: 'AES-GCM',
+                length: 256,
+            },
+            exportable,
+            ['encrypt', 'decrypt']
+        );
     }
 
     /**
-     * Decifra i dati usando AES-256-GCM
-     * @param {Uint8Array} encryptedData - Dati cifrati nel formato [nonce (12 byte), encrypted data, auth tag (16 byte)]
-     * @param {Uint8Array} key - Chiave di cifratura (32 byte)
-     * @param {Uint8Array|null} aad - Dati aggiuntivi autenticati (opzionale)
-     * @returns {Promise<Uint8Array>} Dati decifrati
-     * @throws {Error} Se l'autenticazione fallisce o i dati sono malformati
+     * Imports a key from raw bytes (for compatibility)
+     * @param {Uint8Array} keyData - 32-byte key
+     * @param {boolean} [exportable=false] - Whether the key can be exported
+     * @returns {Promise<CryptoKey>}
      */
-    static async decrypt(encryptedData, key, aad = null) {
-        if (key.length !== 32) {
-            throw new Error('La chiave AES-256-GCM deve essere di 32 byte (256 bit)');
-        }
-
-        // Estrai nonce (primi 12 byte)
-        if (encryptedData.length < 12 + 16) {
-            throw new Error('Dati cifrati malformati: troppo corti per contenere nonce e auth tag');
+    static async importKey(keyData, exportable = false) {
+        if (keyData.length !== 32) {
+            throw new Error('AES-256-GCM key must be 32 bytes (256 bits)');
         }
         
-        const nonce = encryptedData.slice(0, 12);
-        
-        // Estrai auth tag (ultimi 16 byte)
-        const authTag = encryptedData.slice(encryptedData.length - 16);
-        
-        // Estrai i dati cifrati (tutto tranne nonce e auth tag)
-        const encrypted = encryptedData.slice(12, encryptedData.length - 16);
+        return await crypto.subtle.importKey(
+            'raw',
+            keyData,
+            { name: 'AES-GCM' },
+            exportable,
+            ['encrypt', 'decrypt']
+        );
+    }
 
-        // Crea il decipher
-        const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce, {
-            authTagLength: 16
-        });
+    /**
+     * Exports a key if it was created as exportable
+     * @param {CryptoKey} key 
+     * @returns {Promise<Uint8Array>}
+     */
+    static async exportKey(key) {
+        return new Uint8Array(await crypto.subtle.exportKey('raw', key));
+    }
 
-        // Aggiungi AAD se fornito
-        if (aad) {
-            decipher.setAAD(aad);
+    /**
+     * Encrypts data using AES-256-GCM
+     * @param {Uint8Array} data - Data to encrypt
+     * @param {CryptoKey|Uint8Array} key - Either a CryptoKey or raw key bytes
+     * @param {Uint8Array} [aad] - Additional authenticated data
+     * @returns {Promise<Uint8Array>} Encrypted data in format [nonce (12B), ciphertext, tag (16B)]
+     */
+    static async encrypt(data, key, aad) {
+        let cryptoKey = key;
+        if (key instanceof Uint8Array) {
+            cryptoKey = await this.importKey(key, false);
         }
 
-        // Imposta l'authentication tag
-        decipher.setAuthTag(authTag);
+        const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV
+        const params = {
+            name: 'AES-GCM',
+            iv,
+            tagLength: 128,
+            ...(aad && { additionalData: aad })
+        };
+
+        const ciphertext = await crypto.subtle.encrypt(
+            params,
+            cryptoKey,
+            data
+        );
+
+        // Combine IV (12B) + ciphertext (includes 16B tag at the end)
+        const result = new Uint8Array(iv.length + ciphertext.byteLength);
+        result.set(iv, 0);
+        result.set(new Uint8Array(ciphertext), iv.length);
+        
+        return result;
+    }
+
+    /**
+     * Decrypts data using AES-256-GCM
+     * @param {Uint8Array} encryptedData - Encrypted data in format [nonce (12B), ciphertext]
+     * @param {CryptoKey|Uint8Array} key - Either a CryptoKey or raw key bytes
+     * @param {Uint8Array} [aad] - Additional authenticated data
+     * @returns {Promise<Uint8Array>} Decrypted data
+     * @throws {Error} If authentication fails
+     */
+    static async decrypt(encryptedData, key, aad) {
+        if (encryptedData.length < 12) {
+            throw new Error('Invalid encrypted data: too short to contain IV');
+        }
+
+        let cryptoKey = key;
+        if (key instanceof Uint8Array) {
+            cryptoKey = await this.importKey(key, false);
+        }
+
+        const iv = encryptedData.slice(0, 12);
+        const ciphertext = encryptedData.slice(12);
 
         try {
-            // Decifra i dati
-            const decrypted = Buffer.concat([
-                decipher.update(encrypted),
-                decipher.final()
-            ]);
-            
+            const decrypted = await crypto.subtle.decrypt(
+                {
+                    name: 'AES-GCM',
+                    iv,
+                    tagLength: 128,
+                    ...(aad && { additionalData: aad })
+                },
+                cryptoKey,
+                ciphertext
+            );
+
             return new Uint8Array(decrypted);
         } catch (err) {
-            throw new Error('Autenticazione fallita: i dati potrebbero essere stati alterati o la chiave è errata');
+            throw new Error('Decryption failed: authentication tag verification failed');
         }
+    }
+
+    /**
+     * Helper to generate a secure random key (exportable version)
+     * @returns {Promise<Uint8Array>} 32-byte key
+     */
+    static async generateRandomKey() {
+        return crypto.getRandomValues(new Uint8Array(32));
     }
 }

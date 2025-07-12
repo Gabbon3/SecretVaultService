@@ -1,5 +1,6 @@
 import { Config } from '../../config.js';
 import { HexEncoder } from '../../utils/encoders/hex.js';
+import { AES256GCM } from '../symmetric/aes256gcm.js';
 
 export class KeyManagementService {
     static #keys = new Map();
@@ -60,8 +61,7 @@ export class KeyManagementService {
         }
 
         try {
-            const keyData = HexEncoder.decode(dekConfig);
-            this.#keys.set(1, keyData);
+            this.#keys.set(1, Config.DEK);
         } catch (e) {
             throw new Error(`Failed to load keys from configuration: ${e.message}`);
         }

@@ -5,9 +5,9 @@ import { Authorize } from '../middlewares/auth.middleware.js';
 const router = express.Router();
 const controller = new SecretController();
 
-router.use(Authorize);
+router.use(Authorize());
 router.post('/', controller.create);
-router.get('/:id', controller.get);
+router.get('/:identifier', controller.get);
 router.put('/:id', controller.update);
 router.delete('/:id', controller.delete);
 router.get('/', controller.list);

@@ -9,6 +9,12 @@ import secretRouter from './routes/secret.routes.js';
 import clientRouter from './routes/client.routes.js';
 
 /**
+ * Globals
+ */
+import { webcrypto } from 'node:crypto';
+globalThis.crypto = webcrypto;
+
+/**
  * Inizializzazione app
  */
 const app = express();
@@ -16,6 +22,7 @@ const router = express.Router();
 /**
  * Inizializzo i componenti
  */
+await Config.initialize();
 KeyManagementService.initialize();
 /**
  * MIDDLEWARES

@@ -11,7 +11,7 @@ router.post('/login', controller.login);
 router.get('/validate', controller.validate);
 
 // Protected routes
-router.get('/me', Authorize, controller.getClientInfo);
-router.delete('/:clientId/revoke', Authorize, controller.revoke);
+router.get('/me', Authorize(), controller.getClientInfo);
+router.delete('/:clientId/revoke', Authorize(), controller.revoke);
 
 export default router;

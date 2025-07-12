@@ -1,6 +1,8 @@
 import { asyncHandler } from "../helpers/asyncHandler.js";
 import { SecretService } from "../services/secret.service.js";
 import { ServerError } from "../helpers/serverError.js";
+import { SecretValidator } from "../validator/secret.validator.js";
+import { Validator } from "../validator/validator.js";
 
 export class SecretController {
     constructor() {
@@ -16,17 +18,16 @@ export class SecretController {
      * @param {Object} res - Express response object
      */
     create = asyncHandler(async (req, res) => {
+        SecretValidator.name(req.body.name);
+        SecretValidator.value(req.body.value);
+
         const { name, value } = req.body;
-        
-        if (!name || !value) {
-            throw new ServerError('Name and value are required', 400);
-        }
 
         const secret = await this.service.create(name, value);
         res.status(201).json({
             id: secret.id,
             name: secret.name,
-            createdAt: secret.createdAt
+            createdAt: secret.createdAt,
         });
     });
 
@@ -38,13 +39,13 @@ export class SecretController {
      * @param {Object} res - Express response object
      */
     get = asyncHandler(async (req, res) => {
-        const { id } = req.params;
-        
-        if (!id) {
-            throw new ServerError('Secret id is required', 400);
-        }
+        SecretValidator.identifier(req.params.identifier);
 
-        const secret = await this.service.getAsString(id);
+        const { identifier } = req.params;
+
+        const isUUID = Validator.isUuid(identifier);
+
+        const secret = await this.service.getAsString(identifier, isUUID);
         res.status(200).json(secret);
     });
 
@@ -58,17 +59,17 @@ export class SecretController {
      * @param {Object} res - Express response object
      */
     update = asyncHandler(async (req, res) => {
+        SecretValidator.id(req.params.id);
+        SecretValidator.name(req.body.name);
+        SecretValidator.value(req.body.value);
+
         const { id } = req.params;
         const { name, value } = req.body;
-        
-        if (!name || !value) {
-            throw new ServerError('Name and value are required', 400);
-        }
 
         const updatedSecret = await this.service.update(id, name, value);
         res.status(200).json({
             name: updatedSecret.name,
-            updatedAt: updatedSecret.updatedAt
+            updatedAt: updatedSecret.updatedAt,
         });
     });
 
@@ -80,15 +81,17 @@ export class SecretController {
      * @param {Object} res - Express response object
      */
     delete = asyncHandler(async (req, res) => {
-        const { name } = req.params;
-        
-        if (!name) {
-            throw new ServerError('Secret name is required', 400);
+        SecretValidator.id(req.params.id);
+
+        const { id } = req.params;
+
+        if (!id) {
+            throw new ServerError("Secret name is required", 400);
         }
 
-        const isDeleted = await this.service.delete(name);
+        const isDeleted = await this.service.delete(id);
         if (!isDeleted) {
-            throw new ServerError('Secret not found', 404);
+            throw new ServerError("Secret not found", 404);
         }
 
         res.status(204).end();
@@ -112,15 +115,13 @@ export class SecretController {
      * @param {Object} res - Express response object
      */
     exists = asyncHandler(async (req, res) => {
+        SecretValidator.name(req.body.name);
+
         const { name } = req.params;
-        
-        if (!name) {
-            throw new ServerError('Secret name is required', 400);
-        }
 
         const secrets = await this.service.list();
-        const exists = secrets.some(secret => secret.name === name);
-        
+        const exists = secrets.some((secret) => secret.name === name);
+
         res.status(200).json({ exists });
     });
 }

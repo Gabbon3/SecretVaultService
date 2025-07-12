@@ -40,24 +40,26 @@ export class SecretService {
 
     /**
      * Retrieves and decrypts a secret by name
-     * @param {string} id - Secret identifier
+     * @param {string} identifier - Secret identifier/name
+     * @param {boolean} isUUID - true to search by id
      * @returns {Promise<{name: string, data: Uint8Array}>} Decrypted secret data
      * @throws {Error} If secret not found or decryption fails
      */
-    async get(id) {
-        if (!id || typeof id !== 'string' || id.trim() === '') {
+    async get(identifier, isUUID) {
+        if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
             throw new Error('Secret name cannot be empty');
         }
 
         let secret;
         try {
-            secret = await Secret.findOne({ where: { id: id } });
+            const condition = isUUID ? { id: identifier } : { name: identifier }
+            secret = await Secret.findOne({ where: condition });
         } catch (error) {
-            throw new Error(`Failed to retrieve secret '${id}': ${error.message}`);
+            throw new Error(`Failed to retrieve secret '${identifier}': ${error.message}`);
         }
 
         if (!secret) {
-            throw new ServerError(`Secret '${id}' not found`, 404);
+            throw new ServerError(`Secret '${identifier}' not found`, 404);
         }
 
         try {
@@ -65,24 +67,26 @@ export class SecretService {
             const decrypted = await SecretEncryptionService.decryptSecret(new Uint8Array(secret.data));
             
             return {
+                id: secret.id,
                 name: secret.name,
                 data: decrypted,
                 createdAt: secret.createdAt,
                 updatedAt: secret.updatedAt
             };
         } catch (error) {
-            throw new Error(`Failed to decrypt secret '${id}': ${error.message}`);
+            throw new Error(`Failed to decrypt secret '${identifier}': ${error.message}`);
         }
     }
 
     /**
      * Retrieves and decrypts a secret by name, returning as string
-     * @param {string} name - Secret name/identifier
+     * @param {string} identifier - Secret name/identifier
+     * @param {boolean} isUUID - true to search by id
      * @returns {Promise<{name: string, data: string}>} Decrypted secret as string
      * @throws {Error} If secret not found or decryption fails
      */
-    async getAsString(name) {
-        const secret = await this.get(name);
+    async getAsString(identifier, isUUID) {
+        const secret = await this.get(identifier, isUUID);
         return {
             ...secret,
             data: new TextDecoder().decode(secret.data)

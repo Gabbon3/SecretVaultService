@@ -1,6 +1,8 @@
 import { asyncHandler } from "../helpers/asyncHandler.js";
 import { ClientService } from "../services/client.service.js";
 import { ServerError } from "../helpers/serverError.js";
+import { JWT } from "../auth/jsonwebtoken.js";
+import { Config } from "../config.js";
 
 /**
  * Middleware di autorizzazione che verifica:
@@ -38,7 +40,7 @@ export const Authorize = (options = {}) => {
 
         const service = new ClientService();
         const token = authHeader.split(' ')[1];
-        const { isValid, payload } = await service.validateToken(token);
+        const { isValid, payload } = await JWT.verify(token, Config.JWT_SIGN_KEY);
 
         // Verifica validità token
         if (!isValid || !payload) {
