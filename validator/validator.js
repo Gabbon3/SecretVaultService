@@ -69,6 +69,30 @@ export class Validator {
     }
 
     /**
+     * Validates the value is not empty
+     * @returns {this}
+     * @throws {ServerError} If validation fails
+     * @example
+     * Validator.of("").string().nonEmpty(); // Throws "value cannot be empty"
+     * Validator.of([]).array().nonEmpty(); // Throws "value cannot be empty"
+     */
+    nonEmpty() {
+        if (this.value === undefined || this.value === null) {
+            throw new ServerError(
+                `${this.fieldName} cannot be null/undefined`,
+                400
+            );
+        }
+        if (typeof this.value === "string" && this.value.trim() === "") {
+            throw new ServerError(`${this.fieldName} cannot be empty`, 400);
+        }
+        if (Array.isArray(this.value) && this.value.length === 0) {
+            throw new ServerError(`${this.fieldName} cannot be empty`, 400);
+        }
+        return this;
+    }
+
+    /**
      * Validates the value is a number
      * @returns {this}
      * @throws {ServerError} If validation fails
@@ -181,6 +205,97 @@ export class Validator {
     }
 
     /**
+     * Validates the value is an array
+     * @param {Object} options
+     * @param {number} [options.min=0] - Minimum array length (default: 0)
+     * @param {number} [options.max=-1] - Maximum array length (-1 means no limit, default: -1)
+     * @param {boolean} [options.unique=false] - If true, validates that the array contains no duplicates (default: false)
+     * @returns {this}
+     * @throws {ServerError} If validation fails
+     * @example
+     * Validator.of(input).array(); // Must be array
+     * Validator.of(input).array({ min: 1 }); // Non-empty array
+     * Validator.of(input).array({ min: 0, max: 10 }); // Non-empty array max 10 items
+     * Validator.of(input).array({ unique: true }); // Arrays with distinct elements
+     */
+    array({ min = 0, max = -1, unique = false } = {}) {
+        if (!Array.isArray(this.value)) {
+            throw new ServerError(`${this.fieldName} must be an array`, 400);
+        }
+        // Length validation
+        if (max > 0 && this.value.length > max) {
+            throw new ServerError(
+                `${this.fieldName} must contain max ${max} items`,
+                400
+            );
+        }
+        if (this.value.length < min) {
+            throw new ServerError(
+                `${this.fieldName} must contain at least ${min} items`,
+                400
+            );
+        }
+        // Unique validation
+        if (unique) {
+            const uniqueItems = [...new Set(this.value)];
+            if (uniqueItems.length !== this.value.length) {
+                throw new ServerError(
+                    `${this.fieldName} contains duplicate items`,
+                    400
+                );
+            }
+        }
+        return this;
+    }
+
+    /**
+     * Validates each array item using a callback
+     * @param {(validator: Validator) => void} fn - Validation function
+     * @returns {this}
+     * @throws {ServerError} If any item fails validation
+     * @example
+     * Validator.of(input).each(v => v.string().min(3));
+     */
+    each(fn) {
+        if (!Array.isArray(this.value)) {
+            throw new Error(
+                "Validator Error! each validation cannot be called to a variable not of type array."
+            );
+        }
+        this.value.forEach((item, index) => {
+            try {
+                fn(Validator.of(item, `${this.fieldName}[${index}]`));
+            } catch (error) {
+                throw new ServerError(
+                    `Invalid item at position ${index}: ${error.message}`,
+                    400
+                );
+            }
+        });
+        return this;
+    }
+
+    /**
+     * Validates the value is a valid date (accepts Date, ISO string, or timestamp)
+     * @returns {this}
+     * @throws {ServerError} If validation fails
+     * @example
+     * Validator.of('2023-10-01').date(); // ISO string
+     * Validator.of(1696118400000).date(); // Timestamp
+     * Validator.of(new Date()).date();    // Date object
+     */
+    date() {
+        const date = new Date(this.value);
+        if (isNaN(date.getTime())) {
+            throw new ServerError(
+                `${this.fieldName} must be a valid date`,
+                400
+            );
+        }
+        return this;
+    }
+
+    /**
      * Validates email format
      * @returns {this}
      * @throws {ServerError} If validation fails
@@ -207,7 +322,10 @@ export class Validator {
      */
     uuid() {
         if (!Validator.isUuid(this.value)) {
-            throw new ServerError(`${this.fieldName} must be a valid UUID`, 400);
+            throw new ServerError(
+                `${this.fieldName} must be a valid UUID`,
+                400
+            );
         }
         return this;
     }
@@ -248,6 +366,17 @@ export class Validator {
     }
 
     /**
+     * Determines whether the string is a uuid
+     * @param {string} uuid
+     * @returns {boolean}
+     */
+    static isUuid(uuid) {
+        const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        return typeof uuid === "string" && uuidRegex.test(uuid);
+    }
+
+    /**
      * Creates new Validator instance
      * @param {any} value - Value to validate
      * @param {string} [fieldName] - Field name for error messages
@@ -257,15 +386,5 @@ export class Validator {
      */
     static of(value, fieldName) {
         return new Validator(value, fieldName);
-    }
-
-    /**
-     * Determines whether the string is a uuid
-     * @param {string} uuid 
-     * @returns {boolean}
-     */
-    static isUuid(uuid) {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        return typeof uuid === "string" && uuidRegex.test(uuid)
     }
 }

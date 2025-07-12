@@ -1,6 +1,7 @@
 import { asyncHandler } from "../helpers/asyncHandler.js";
 import { ClientService } from "../services/client.service.js";
 import { ServerError } from "../helpers/serverError.js";
+import { Validator } from "../validator/validator.js";
 
 export class ClientController {
     constructor() {
@@ -17,20 +18,38 @@ export class ClientController {
      * @param {Object} res - Express response
      */
     register = asyncHandler(async (req, res) => {
+        Validator.of(req.body.name, "name").string().max(100);
+        Validator.of(req.body.secret, "secret").string().max(100);
+
+        Validator.of(req.body.roles, "roles")
+            .optional()
+            .array({ max: 10, unique: true })
+            .each((v) => v.string().min(1).max(20));
+
+        Validator.of(req.body.permissions, "permissions")
+            .optional()
+            .array({ max: 10, unique: true  })
+            .each((v) => v.string().min(1).max(20));
+
         const { name, secret, roles, permissions } = req.body;
-        
+
         if (!name || !secret) {
-            throw new ServerError('Name and secret are required', 400);
+            throw new ServerError("Name and secret are required", 400);
         }
 
-        const client = await this.service.createClient(name, secret, roles, permissions);
-        
+        const client = await this.service.createClient(
+            name,
+            secret,
+            roles,
+            permissions
+        );
+
         res.status(201).json({
             id: client.id,
             name: client.name,
             createdAt: client.createdAt,
-            roles: client.roles.split(',').filter(r => r),
-            permissions: client.permissions.split(',').filter(p => p)
+            roles: client.roles.split(",").filter((r) => r),
+            permissions: client.permissions.split(",").filter((p) => p),
         });
     });
 
@@ -43,24 +62,30 @@ export class ClientController {
      * @param {Object} res - Express response
      */
     login = asyncHandler(async (req, res) => {
+        Validator.of(req.body.clientId, "clientId").uuid();
+        Validator.of(req.body.secret, "secret").string().max(100);
+
         const { clientId, secret } = req.body;
-        
+
         if (!clientId || !secret) {
-            throw new ServerError('Client ID and secret are required', 400);
+            throw new ServerError("Client ID and secret are required", 400);
         }
 
-        const { token, client } = await this.service.authenticate(clientId, secret);
-        
+        const { token, client } = await this.service.authenticate(
+            clientId,
+            secret
+        );
+
         res.status(200).json({
             token,
             client: {
                 id: client.id,
                 name: client.name,
-                roles: client.roles.split(',').filter(r => r),
-                permissions: client.permissions.split(',').filter(p => p),
-                createdAt: client.createdAt
+                roles: client.roles.split(",").filter((r) => r),
+                permissions: client.permissions.split(",").filter((p) => p),
+                createdAt: client.createdAt,
             },
-            expiresIn: '1h'
+            expiresIn: "1h",
         });
     });
 
@@ -72,43 +97,17 @@ export class ClientController {
      * @param {Object} res - Express response
      */
     revoke = asyncHandler(async (req, res) => {
+        Validator.of(req.body.clientId, "clientId").uuid();
+
         const { clientId } = req.params;
-        
+
         const isRevoked = await this.service.revokeClient(clientId);
-        
+
         if (!isRevoked) {
-            throw new ServerError('Client not found', 404);
+            throw new ServerError("Client not found", 404);
         }
 
         res.status(204).end();
-    });
-
-    /**
-     * Validates a client token (for health checks)
-     * @param {Object} req - Express request
-     * @param {Object} req.headers - Request headers
-     * @param {string} req.headers.authorization - Bearer token
-     * @param {Object} res - Express response
-     */
-    validate = asyncHandler(async (req, res) => {
-        const authHeader = req.headers.authorization;
-        
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            throw new ServerError('Authentication required', 401);
-        }
-
-        const token = authHeader.split(' ')[1];
-        const { isValid, payload } = await this.service.validateToken(token);
-
-        if (!isValid || !payload) {
-            throw new ServerError('Invalid or expired token', 401);
-        }
-
-        res.status(200).json({
-            isValid: true,
-            clientId: payload.clientId,
-            expiresAt: payload.exp ? new Date(payload.exp * 1000) : null
-        });
     });
 
     /**
@@ -118,20 +117,22 @@ export class ClientController {
      * @param {Object} res - Express response
      */
     getClientInfo = asyncHandler(async (req, res) => {
-        const client = await this.service.getClientById(req.client.id);
-        
+        Validator.of(req.params.clientId, "clientId").uuid();
+
+        const client = await this.service.getClientById(req.body.clientId);
+
         if (!client) {
-            throw new ServerError('Client not found', 404);
+            throw new ServerError("Client not found", 404);
         }
 
         res.status(200).json({
             id: client.id,
             name: client.name,
             isActive: client.isActive,
-            roles: client.roles.split(',').filter(r => r),
-            permissions: client.permissions.split(',').filter(p => p),
+            roles: client.roles.split(",").filter((r) => r),
+            permissions: client.permissions.split(",").filter((p) => p),
             createdAt: client.createdAt,
-            lastUsedAt: client.lastUsedAt
+            lastUsedAt: client.lastUsedAt,
         });
     });
 }
