@@ -91,6 +91,7 @@ export class SecretService {
                 id: secret.id,
                 name: secret.name,
                 data: decrypted,
+                dekId: secret.dekId,
                 createdAt: secret.createdAt,
                 updatedAt: secret.updatedAt,
             };

@@ -33,7 +33,7 @@ export class DEKService {
         const dek = await DEK.findOne({ where: { id } });
         if (!dek) throw new Error("DEK not found");
 
-        dek.key = await KeyManagementService.decryptDEK(dek.key);
+        dek.key = await KeyManagementService.decryptDEK(dek.key, dek.kekId);
 
         return dek;
     }
@@ -55,7 +55,7 @@ export class DEKService {
 
         if (includeKeys) {
             for (const dek of deks) {
-                dek.key = await KeyManagementService.decryptDEK(dek.key)
+                dek.key = await KeyManagementService.decryptDEK(dek.key, dek.kekId)
             }
         }
 
@@ -82,7 +82,7 @@ export class DEKService {
 
         if (includeKeys) {
             for (const dek of deks) {
-                dek.key = await KeyManagementService.decryptDEK(dek.key);
+                dek.key = await KeyManagementService.decryptDEK(dek.key, dek.kekId);
             }
         }
 

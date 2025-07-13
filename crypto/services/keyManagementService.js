@@ -3,7 +3,6 @@ import crc32c from "fast-crc32c";
 import { Config } from "../../config.js";
 import { DEKService } from "../../services/dek.service.js";
 import { AES256GCM } from "../symmetric/aes256gcm.js";
-import { SecretEncryptionService } from "./secretEncryptionService.js";
 import { DEK } from "../../models/dek.js";
 
 export class KeyManagementService {
@@ -29,6 +28,8 @@ export class KeyManagementService {
      * @returns {Promise<Buffer>} Encrypted DEK
      */
     static async encryptDEK(plaintextKey) {
+        if (Config.DEV) return await this.#encryptDEKDev(plaintextKey);
+        // ---
         const plaintextCrc32c = crc32c.calculate(plaintextKey);
 
         const [encryptResponse] = await this.#client.encrypt({
@@ -62,9 +63,12 @@ export class KeyManagementService {
     /**
      * Decrypts a DEK using Google KMS
      * @param {Buffer} encryptedKey - Encrypted DEK from DB
+     * @param {string} kekId - kek identifier
      * @returns {Promise<Buffer>} Decrypted DEK
      */
-    static async decryptDEK(encryptedKey) {
+    static async decryptDEK(encryptedKey, kekId = null) {
+        if (Config.DEV) return await this.#decryptDEKDev(encryptedKey);
+        // ---
         const ciphertextCrc32c = crc32c.calculate(encryptedKey);
 
         const [decryptResponse] = await this.#client.decrypt({
@@ -72,7 +76,7 @@ export class KeyManagementService {
                 Config.KMS.projectId,
                 Config.KMS[Config.KMS.defaultKekId].locationId,
                 Config.KMS[Config.KMS.defaultKekId].keyRingId,
-                Config.KMS[Config.KMS.defaultKekId].keyId
+                kekId || Config.KMS[Config.KMS.defaultKekId].keyId
             ),
             ciphertext: encryptedKey,
             ciphertextCrc32c: {
@@ -89,6 +93,24 @@ export class KeyManagementService {
 
         return decryptResponse.plaintext;
     }
+
+    /**
+     * DEV Methods
+     */
+
+    static async #encryptDEKDev(plaintextKey) {
+        const encryptedDek = await AES256GCM.encrypt(new Uint8Array(plaintextKey), Config.KEK)
+        return Buffer.from(encryptedDek);
+    }
+
+    static async #decryptDEKDev(encryptedKey) {
+        const dek = await AES256GCM.decrypt(new Uint8Array(encryptedKey), Config.KEK);
+        return Buffer.from(dek);
+    }
+
+    /**
+     * * * * *
+     */
 
     /**
      * Get a Data Encryption Key (DEK) by its identifier
@@ -242,20 +264,5 @@ export class KeyManagementService {
         }
         // Load latest DekId
         this.defaultDekId = deks[0]?.id || 1;
-    }
-
-    static #loadKeysFromConfig() {
-        const dekConfig = Config.DEK;
-        if (!dekConfig) {
-            throw new Error("Missing Crypto.DEK in configuration");
-        }
-
-        try {
-            this.#keys.set(1, Config.DEK);
-        } catch (e) {
-            throw new Error(
-                `Failed to load keys from configuration: ${e.message}`
-            );
-        }
     }
 }

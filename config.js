@@ -1,9 +1,11 @@
 import "dotenv/config";
-import { AES256GCM } from "./crypto/symmetric/aes256gcm.js";
 import { HexEncoder } from "./utils/encoders/hex.js";
+import { AES256GCM } from "./crypto/symmetric/aes256gcm.js";
 
 export class Config {
     static initialized = false;
+    static DEV = process.env.DEV == 'true';
+    static KEK = null;
     // Server
     static PORT = process.env.PORT || 3000;
     // Database
@@ -34,6 +36,10 @@ export class Config {
      */
     static async initialize() {
         if (this.initialized) return;
+        // ---
+        if (this.DEV) {
+            this.KEK = await AES256GCM.importKey(HexEncoder.decode(process.env.KEK));
+        }
         // ---
         this.JWT_SIGN_KEY = await crypto.subtle.importKey(
             "raw",
