@@ -6,7 +6,8 @@ const router = express.Router();
 const controller = new ClientController();
 
 // Admin only can register server
-router.post('/register', Authorize({ roles: ['*'] }), controller.register);
+// router.post('/register', Authorize({ roles: ['*'] }), controller.register);
+router.post('/register', controller.register);
 
 // Public routes
 router.post('/login', controller.login);

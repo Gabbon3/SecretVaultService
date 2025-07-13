@@ -100,7 +100,8 @@ export class Validator {
      * Validator.of("Hi").number(); // Throws "value must be a number"
      */
     number() {
-        if (typeof this.value !== "number") {
+        this.value = Number(this.value)
+        if (typeof this.value !== "number" && isNaN(this.value)) {
             throw new ServerError(`${this.fieldName} must be a number`, 400);
         }
         return this;

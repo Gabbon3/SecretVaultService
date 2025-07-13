@@ -7,6 +7,7 @@ import { KeyManagementService } from './crypto/services/keyManagementService.js'
 // routes
 import secretRouter from './routes/secret.routes.js';
 import clientRouter from './routes/client.routes.js';
+import dekRouter from './routes/dek.routes.js';
 
 /**
  * Globals
@@ -19,11 +20,7 @@ globalThis.crypto = webcrypto;
  */
 const app = express();
 const router = express.Router();
-/**
- * Inizializzo i componenti
- */
-await Config.initialize();
-KeyManagementService.initialize();
+
 /**
  * MIDDLEWARES
  * qui ci sono i middleware che verranno utilizzati in tutte le routes
@@ -35,17 +32,20 @@ app.use(express.json());
 app.use('/api', router);
 router.use('/secret', secretRouter);
 router.use('/client', clientRouter);
+router.use('/dek', dekRouter);
 /**
  * Middlewares per gli errori
  */
 app.use(errorHandler);
-
+/**
+ * Server
+ */
 try {
     await database.authenticate();
     console.log('☑️ DB');
     // -- da utilizzare solo quando ci si vuole allineare con il db
     // await database.sync({ force: true });
-    console.log('☑️ Struct');
+    // console.log('☑️ Struct');
     // ---
     app.listen(Config.PORT, '0.0.0.0', () => {
         console.log(`☑️ Server`);
@@ -53,3 +53,9 @@ try {
 } catch (error) {
     console.error('❌ Errore durante l\'avvio del server => ' + error);
 }
+
+/**
+ * Inizializzo i componenti
+ */
+await Config.initialize();
+await KeyManagementService.initialize();

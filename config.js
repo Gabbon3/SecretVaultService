@@ -17,6 +17,16 @@ export class Config {
     static KEK = null;
     static DEK = null;
     static DEKID = process.env.DEKID;
+    // Google KMS
+    static KMS = {
+        projectId: process.env.GCLOUD_PROJECT_ID,
+        defaultKekId: 'default',
+        KEK1: {
+            locationId: 'global',
+            keyRingId: 'secretvault',
+            keyId: 'quickstart'
+        }
+    };
 
     /**
      * Inizializza le variabili
@@ -27,9 +37,9 @@ export class Config {
         this.JWT_SIGN_KEY = await crypto.subtle.importKey(
             "raw",
             HexEncoder.decode(process.env.JWT_SIGN_KEY),
-            { 
-                name: 'HMAC',
-                hash: 'SHA-256'
+            {
+                name: "HMAC",
+                hash: "SHA-256",
             },
             false,
             ["sign", "verify"]
