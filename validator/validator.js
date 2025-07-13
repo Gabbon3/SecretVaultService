@@ -38,6 +38,7 @@ export class Validator {
     constructor(value, fieldName = "value") {
         this.value = value;
         this.fieldName = fieldName;
+        this.skipValidation = false;
     }
 
     /**
@@ -49,7 +50,7 @@ export class Validator {
      */
     optional() {
         if (this.value === undefined || this.value === null) {
-            return;
+            this.skipValidation = true;
         }
         return this;
     }
@@ -62,6 +63,7 @@ export class Validator {
      * Validator.of(123).string(); // Throws "value must be a string"
      */
     string() {
+        if (this.skipValidation) return this;
         if (typeof this.value !== "string") {
             throw new ServerError(`${this.fieldName} must be a string`, 400);
         }
@@ -77,6 +79,7 @@ export class Validator {
      * Validator.of([]).array().nonEmpty(); // Throws "value cannot be empty"
      */
     nonEmpty() {
+        if (this.skipValidation) return this;
         if (this.value === undefined || this.value === null) {
             throw new ServerError(
                 `${this.fieldName} cannot be null/undefined`,
@@ -100,6 +103,7 @@ export class Validator {
      * Validator.of("Hi").number(); // Throws "value must be a number"
      */
     number() {
+        if (this.skipValidation) return this;
         this.value = Number(this.value)
         if (typeof this.value !== "number" && isNaN(this.value)) {
             throw new ServerError(`${this.fieldName} must be a number`, 400);
@@ -115,6 +119,7 @@ export class Validator {
      * Validator.of('true').boolean(); // Throws "value must be a boolean"
      */
     boolean() {
+        if (this.skipValidation) return this;
         if (typeof this.value !== "boolean") {
             throw new ServerError(`${this.fieldName} must be a boolean`, 400);
         }
@@ -131,6 +136,7 @@ export class Validator {
      * Validator.of(3).min(5); // Throws "value must be at least 5"
      */
     min(min) {
+        if (this.skipValidation) return this;
         if (typeof this.value === "string" && this.value.length < min) {
             throw new ServerError(
                 `${this.fieldName} must be at least ${min} characters`,
@@ -155,6 +161,7 @@ export class Validator {
      * Validator.of('toolong').max(5); // Throws "value must be at most 5 characters"
      */
     max(max) {
+        if (this.skipValidation) return this;
         if (typeof this.value === "string" && this.value.length > max) {
             throw new ServerError(
                 `${this.fieldName} must be at most ${max} characters`,
@@ -189,6 +196,7 @@ export class Validator {
      * Validator.of("no<script>").forbiddenChars('<script>');
      */
     forbiddenChars(chars, message) {
+        if (this.skipValidation) return this;
         if (typeof this.value !== "string") return this;
 
         const forbiddenList = Array.isArray(chars) ? chars : [chars];
@@ -220,6 +228,7 @@ export class Validator {
      * Validator.of(input).array({ unique: true }); // Arrays with distinct elements
      */
     array({ min = 0, max = -1, unique = false } = {}) {
+        if (this.skipValidation) return this;
         if (!Array.isArray(this.value)) {
             throw new ServerError(`${this.fieldName} must be an array`, 400);
         }
@@ -258,6 +267,7 @@ export class Validator {
      * Validator.of(input).each(v => v.string().min(3));
      */
     each(fn) {
+        if (this.skipValidation) return this;
         if (!Array.isArray(this.value)) {
             throw new Error(
                 "Validator Error! each validation cannot be called to a variable not of type array."
@@ -286,6 +296,7 @@ export class Validator {
      * Validator.of(new Date()).date();    // Date object
      */
     date() {
+        if (this.skipValidation) return this;
         const date = new Date(this.value);
         if (isNaN(date.getTime())) {
             throw new ServerError(
@@ -304,6 +315,7 @@ export class Validator {
      * Validator.of('invalid').email(); // Throws "value must be a valid email"
      */
     email() {
+        if (this.skipValidation) return this;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (typeof this.value !== "string" || !emailRegex.test(this.value)) {
             throw new ServerError(
@@ -322,6 +334,7 @@ export class Validator {
      * Validator.of('not-a-uuid').uuid(); // Throws "value must be a valid UUID"
      */
     uuid() {
+        if (this.skipValidation) return this;
         if (!Validator.isUuid(this.value)) {
             throw new ServerError(
                 `${this.fieldName} must be a valid UUID`,
@@ -341,6 +354,7 @@ export class Validator {
      * Validator.of('foo').custom(val => val === 'bar', 'Value must be "bar"');
      */
     custom(fn, message) {
+        if (this.skipValidation) return this;
         if (!fn(this.value)) {
             throw new ServerError(message || `Invalid ${this.fieldName}`, 400);
         }
@@ -357,6 +371,7 @@ export class Validator {
      * Validator.of('123').regex(/^[a-z]+$/, 'Only letters allowed');
      */
     regex(pattern, message) {
+        if (this.skipValidation) return this;
         if (typeof this.value !== "string" || !pattern.test(this.value)) {
             throw new ServerError(
                 message || `${this.fieldName} has invalid format`,

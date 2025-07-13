@@ -3,12 +3,14 @@ import crc32c from "fast-crc32c";
 import { Config } from "../../config.js";
 import { DEKService } from "../../services/dek.service.js";
 import { AES256GCM } from "../symmetric/aes256gcm.js";
+import { SecretEncryptionService } from "./secretEncryptionService.js";
+import { DEK } from "../../models/dek.js";
 
 export class KeyManagementService {
     static #keys = new Map();
-    static #defaultKeyId = null;
     static #client = new KeyManagementServiceClient();
     static #dekService = new DEKService();
+    static defaultDekId = null;
 
     /**
      * Initialize the service (must be called before use)
@@ -19,7 +21,6 @@ export class KeyManagementService {
         }
 
         await this.#loadKeysFromDb();
-        this.#determineDefaultKeyId();
     }
 
     /**
@@ -33,9 +34,9 @@ export class KeyManagementService {
         const [encryptResponse] = await this.#client.encrypt({
             name: this.#client.cryptoKeyPath(
                 Config.KMS.projectId,
-                Config.KMS.KEK1.locationId,
-                Config.KMS.KEK1.keyRingId,
-                Config.KMS.KEK1.keyId
+                Config.KMS[Config.KMS.defaultKekId].locationId,
+                Config.KMS[Config.KMS.defaultKekId].keyRingId,
+                Config.KMS[Config.KMS.defaultKekId].keyId
             ),
             plaintext: plaintextKey,
             plaintextCrc32c: {
@@ -48,7 +49,10 @@ export class KeyManagementService {
         if (!encryptResponse.verifiedPlaintextCrc32c) {
             throw new Error("Encrypt: request corrupted in-transit");
         }
-        if (crc32c.calculate(ciphertext) !== Number(encryptResponse.ciphertextCrc32c.value)) {
+        if (
+            crc32c.calculate(ciphertext) !==
+            Number(encryptResponse.ciphertextCrc32c.value)
+        ) {
             throw new Error("Encrypt: response corrupted in-transit");
         }
 
@@ -66,9 +70,9 @@ export class KeyManagementService {
         const [decryptResponse] = await this.#client.decrypt({
             name: this.#client.cryptoKeyPath(
                 Config.KMS.projectId,
-                Config.KMS.KEK1.locationId,
-                Config.KMS.KEK1.keyRingId,
-                Config.KMS.KEK1.keyId
+                Config.KMS[Config.KMS.defaultKekId].locationId,
+                Config.KMS[Config.KMS.defaultKekId].keyRingId,
+                Config.KMS[Config.KMS.defaultKekId].keyId
             ),
             ciphertext: encryptedKey,
             ciphertextCrc32c: {
@@ -76,7 +80,10 @@ export class KeyManagementService {
             },
         });
 
-        if (crc32c.calculate(decryptResponse.plaintext) !== Number(decryptResponse.plaintextCrc32c.value)) {
+        if (
+            crc32c.calculate(decryptResponse.plaintext) !==
+            Number(decryptResponse.plaintextCrc32c.value)
+        ) {
             throw new Error("Decrypt: response corrupted in-transit");
         }
 
@@ -113,11 +120,115 @@ export class KeyManagementService {
     }
 
     /**
-     * Get the current default key ID
-     * @returns {string} The default key ID
+     * Load new DEK to cache (#keys)
+     * @param {DEK} dek
      */
-    static get defaultKeyId() {
-        return this.#defaultKeyId;
+    static async loadNewKey(dekId, dekKey) {
+        this.#keys.set(
+            dekId,
+            await AES256GCM.importKey(new Uint8Array(dekKey))
+        );
+        // Update with new DEK ID, so the latest
+        this.defaultDekId = dekId;
+    }
+
+    /**
+     * Re-encrypts all DEKs with a new KEK (Key Encryption Key)
+     * @param {string} newKekId - The new KEK identifier (e.g., 'kek-v2')
+     * @param {string} [oldKekId] - Optional old KEK identifier for filtering
+     * @returns {Promise<{total: number, success: number, failures: Array<{id: number, error: string}>}>}
+     */
+    static async reencryptAllDeksWithNewKek(newKekId, oldKekId = null) {
+        if (!newKekId || typeof newKekId !== "string") {
+            throw new Error("newKekId must be a non-empty string");
+        }
+
+        const dekService = new DEKService();
+        const results = {
+            total: 0,
+            success: 0,
+            failures: [],
+        };
+
+        try {
+            // 1. Fetch all DEKs (decrypted)
+            const deks = await dekService.getAllDeks(true);
+
+            // 2. Filter by old KEK if specified
+            const deksToReencrypt = oldKekId
+                ? deks.filter((dek) => dek.kekId === oldKekId)
+                : deks;
+
+            results.total = deksToReencrypt.length;
+
+            // 3. Process each DEK
+            for (const dek of deksToReencrypt) {
+                try {
+                    // Decrypt the DEK using the old KEK (already done in getAllDeks)
+                    const rawDek = dek.key;
+
+                    // Re-encrypt with new KEK
+                    const reencrypted = await this.#client.encrypt({
+                        name: this.#client.cryptoKeyPath(
+                            Config.KMS.projectId,
+                            Config.KMS[newKekId].locationId,
+                            Config.KMS[newKekId].keyRingId,
+                            Config.KMS[newKekId].keyId
+                        ),
+                        plaintext: rawDek,
+                    });
+
+                    // Update the DEK record
+                    await DEK.update(
+                        {
+                            key: reencrypted[0].ciphertext,
+                            kekId: newKekId,
+                            version: dek.version + 1,
+                        },
+                        { where: { id: dek.id } }
+                    );
+
+                    // Update in-memory cache
+                    if (this.#keys.has(dek.id)) {
+                        this.#keys.set(
+                            dek.id,
+                            await AES256GCM.importKey(rawDek)
+                        );
+                    }
+
+                    results.success++;
+                } catch (error) {
+                    results.failures.push({
+                        id: dek.id,
+                        error: error.message,
+                    });
+                    console.error(`Failed to re-encrypt DEK ${dek.id}:`, error);
+                }
+            }
+
+            return results;
+        } catch (error) {
+            throw new Error(`Failed to re-encrypt DEKs: ${error.message}`);
+        }
+    }
+
+    /**
+     * Rotates to a new KEK version (high-level operation)
+     * @param {string} newKekId - The new KEK identifier
+     * @returns {Promise<{dekRotation: object, secretRotation: object}>}
+     */
+    static async rotateToNewKek(newKekId) {
+        // 1. First re-encrypt all DEKs with new KEK
+        const dekResults = await this.reencryptAllDeksWithNewKek(newKekId);
+
+        // 2. Update configuration to use new KEK as default
+        Config.KMS.defaultKekId = newKekId;
+
+        // 3. Return both operations results
+        return {
+            dekRotation: dekResults,
+            // secretRotation will be handled by SecretService
+        };
     }
 
     // Private methods
@@ -129,6 +240,8 @@ export class KeyManagementService {
                 await AES256GCM.importKey(new Uint8Array(dek.key))
             );
         }
+        // Load latest DekId
+        this.defaultDekId = deks[0]?.id || 1;
     }
 
     static #loadKeysFromConfig() {
@@ -143,16 +256,6 @@ export class KeyManagementService {
             throw new Error(
                 `Failed to load keys from configuration: ${e.message}`
             );
-        }
-    }
-
-    static #determineDefaultKeyId() {
-        // Try to get default from config, fall back to first available key
-        const configDefault = Config.DEKID;
-        this.#defaultKeyId = Number(configDefault) || this.listKeyIds()[0];
-
-        if (!this.#defaultKeyId) {
-            throw new Error("No keys available and no default key specified");
         }
     }
 }

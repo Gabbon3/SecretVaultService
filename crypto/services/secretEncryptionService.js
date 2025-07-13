@@ -4,7 +4,6 @@ import { KeyManagementService } from './keyManagementService.js';
 
 export class SecretEncryptionService {
     static #SupportedAlgorithm = 'AES-256-GCM';
-    static #CurrentVersion = 1;
 
     /**
      * Encrypts secret data
@@ -20,13 +19,13 @@ export class SecretEncryptionService {
 
         try {
             // Use default key if not specified
-            dekId = dekId ?? KeyManagementService.defaultKeyId;
+            dekId = dekId ?? KeyManagementService.defaultDekId;
             const dek = KeyManagementService.getKey(dekId);
 
             // Create Package Header
             const header = {
                 alg: this.#SupportedAlgorithm,
-                version: this.#CurrentVersion,
+                version: 1,
                 dekId: dekId
             };
 
@@ -52,10 +51,11 @@ export class SecretEncryptionService {
     /**
      * Decrypts an encrypted secret package
      * @param {Uint8Array} encryptedPackageBytes - Encrypted package bytes
-     * @returns {Promise<Uint8Array>} Decrypted data
+     * @param {number} expectedDekId - dekId from Secret model
+     * @returns {Promise<{ secret: Uint8Array, header: { alg: string, version: number, dekId: number }}>} Decrypted data
      * @throws {Error} When decryption fails or input is invalid
      */
-    static async decryptSecret(encryptedPackageBytes) {
+    static async decryptSecret(encryptedPackageBytes, expectedDekId) {
         if (!encryptedPackageBytes || encryptedPackageBytes.length === 0) {
             throw new Error('Encrypted package cannot be null or empty');
         }
@@ -69,8 +69,13 @@ export class SecretEncryptionService {
                 throw new Error(`Unsupported algorithm: ${encryptedPackage.header.alg}. Only ${this.#SupportedAlgorithm} is supported.`);
             }
 
-            if (encryptedPackage.header.version > this.#CurrentVersion) {
-                throw new Error(`Package version ${encryptedPackage.header.version} is not supported. Maximum supported version is ${this.#CurrentVersion}.`);
+            if (encryptedPackage.header.version > KeyManagementService.defaultDekId) {
+                throw new Error(`Package version ${encryptedPackage.header.version} is not supported. Maximum supported version is ${KeyManagementService.defaultDekId}.`);
+            }
+
+            // Checking dekId (id from header and id from the model)
+            if (expectedDekId !== encryptedPackage.header.dekId) {
+                throw new Error(`DEK mismatch: expected ${expectedDekId}, found ${encryptedPackage.header.dekId}`);
             }
 
             // Get the encryption key
@@ -80,7 +85,11 @@ export class SecretEncryptionService {
             const headerBytes = MessagePack.encode(encryptedPackage.header);
 
             // Decrypt data
-            return await AES256GCM.decrypt(encryptedPackage.payload, dek, headerBytes);
+            const decryptedSecret = await AES256GCM.decrypt(encryptedPackage.payload, dek, headerBytes);
+            return {
+                secret: decryptedSecret,
+                header: encryptedPackage.header,
+            };
         } catch (ex) {
             throw new Error(`Failed to decrypt secret: ${ex.message}`);
         }

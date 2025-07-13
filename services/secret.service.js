@@ -1,3 +1,4 @@
+import { KeyManagementService } from "../crypto/services/keyManagementService.js";
 import { SecretEncryptionService } from "../crypto/services/secretEncryptionService.js";
 import { ServerError } from "../helpers/serverError.js";
 import { Secret } from "../models/secret.js";
@@ -11,25 +12,29 @@ export class SecretService {
      * @throws {Error} If encryption or database operation fails
      */
     async create(name, plaintext) {
-        if (!name || typeof name !== 'string' || name.trim() === '') {
-            throw new Error('Secret name cannot be empty');
+        if (!name || typeof name !== "string" || name.trim() === "") {
+            throw new Error("Secret name cannot be empty");
         }
 
         if (!plaintext) {
-            throw new Error('Plaintext data cannot be empty');
+            throw new Error("Plaintext data cannot be empty");
         }
 
         // Convert string to Uint8Array if needed
-        const dataToEncrypt = typeof plaintext === 'string' 
-            ? new TextEncoder().encode(plaintext) 
-            : plaintext;
+        const dataToEncrypt =
+            typeof plaintext === "string"
+                ? new TextEncoder().encode(plaintext)
+                : plaintext;
 
         try {
-            const encrypted = await SecretEncryptionService.encryptSecret(dataToEncrypt);
-            
+            const encrypted = await SecretEncryptionService.encryptSecret(
+                dataToEncrypt
+            );
+
             const secret = await Secret.create({
                 name: name,
-                data: Buffer(encrypted),
+                data: Buffer.from(encrypted),
+                dekId: KeyManagementService.defaultDekId,
             });
 
             return secret;
@@ -46,16 +51,24 @@ export class SecretService {
      * @throws {Error} If secret not found or decryption fails
      */
     async get(identifier, isUUID) {
-        if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
-            throw new Error('Secret name cannot be empty');
+        if (
+            !identifier ||
+            typeof identifier !== "string" ||
+            identifier.trim() === ""
+        ) {
+            throw new Error("Secret name cannot be empty");
         }
 
         let secret;
         try {
-            const condition = isUUID ? { id: identifier } : { name: identifier }
+            const condition = isUUID
+                ? { id: identifier }
+                : { name: identifier };
             secret = await Secret.findOne({ where: condition });
         } catch (error) {
-            throw new Error(`Failed to retrieve secret '${identifier}': ${error.message}`);
+            throw new Error(
+                `Failed to retrieve secret '${identifier}': ${error.message}`
+            );
         }
 
         if (!secret) {
@@ -63,18 +76,48 @@ export class SecretService {
         }
 
         try {
+            const { secret: decrypted, header } =
+                await SecretEncryptionService.decryptSecret(
+                    new Uint8Array(secret.data),
+                    secret.dekId
+                );
 
-            const decrypted = await SecretEncryptionService.decryptSecret(new Uint8Array(secret.data));
-            
+            // Check if dekId is different than current one, if true then re-encrypt with new dek
+            if (header.dekId !== KeyManagementService.defaultDekId) {
+                this.#scheduleRotation(secret.id, secret.name, decrypted);
+            }
+
             return {
                 id: secret.id,
                 name: secret.name,
                 data: decrypted,
                 createdAt: secret.createdAt,
-                updatedAt: secret.updatedAt
+                updatedAt: secret.updatedAt,
             };
         } catch (error) {
-            throw new Error(`Failed to decrypt secret '${identifier}': ${error.message}`);
+            throw new Error(
+                `Failed to decrypt secret '${identifier}': ${error.message}`
+            );
+        }
+    }
+
+    /**
+     * Rotate Secret with newest DEK
+     * @param {string} secretId - UUID
+     * @param {string} secretName
+     * @param {Uint8Array} decryptedData
+     */
+    async #scheduleRotation(secretId, secretName, decryptedData) {
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            await this.update(secretId, secretName, decryptedData, true);
+            console.log(
+                `Successfully rotated secret ${secretId} to DEK ${KeyManagementService.defaultDekId}`
+            );
+        } catch (error) {
+            console.error(`Rotation failed for secret ${secretId}:`, error);
+            // No Retry
         }
     }
 
@@ -89,7 +132,7 @@ export class SecretService {
         const secret = await this.get(identifier, isUUID);
         return {
             ...secret,
-            data: new TextDecoder().decode(secret.data)
+            data: new TextDecoder().decode(secret.data),
         };
     }
 
@@ -98,37 +141,51 @@ export class SecretService {
      * @param {string} id - Secret identifier
      * @param {string} name - Secret name
      * @param {string|Uint8Array} newPlaintext - New secret data to encrypt
+     * @param {boolean} [isRotation=false] - if true, update lastRotation
      * @returns {Promise<Secret>} The updated secret record
      * @throws {Error} If secret not found or operation fails
      */
-    async update(id, name, newPlaintext) {
+    async update(id, name, newPlaintext, isRotation = false) {
         if (!id) {
-            throw new Error('Secret id cannot be empty');
+            throw new Error("Secret id cannot be empty");
         }
 
-        if (!name || typeof name !== 'string' || name.trim() === '') {
-            throw new Error('Secret name cannot be empty');
+        if (!name || typeof name !== "string" || name.trim() === "") {
+            throw new Error("Secret name cannot be empty");
         }
 
         if (!newPlaintext) {
-            throw new Error('Plaintext data cannot be empty');
+            throw new Error("Plaintext data cannot be empty");
         }
 
         // Convert string to Uint8Array if needed
-        const dataToEncrypt = typeof newPlaintext === 'string' 
-            ? new TextEncoder().encode(newPlaintext) 
-            : newPlaintext;
+        const dataToEncrypt =
+            typeof newPlaintext === "string"
+                ? new TextEncoder().encode(newPlaintext)
+                : newPlaintext;
 
         try {
-            const encrypted = await SecretEncryptionService.encryptSecret(dataToEncrypt);
-            
+            const encrypted = await SecretEncryptionService.encryptSecret(
+                dataToEncrypt
+            );
+
+            let dataToUpdate = {
+                data: Buffer.from(encrypted),
+                dekId: KeyManagementService.defaultDekId,
+            };
+
+            if (isRotation) {
+                dataToUpdate = {
+                    ...dataToUpdate,
+                    lastRotation: new Date(),
+                };
+            }
+
             const [affectedCount, updatedSecrets] = await Secret.update(
-                { 
-                    data: encrypted,
-                },
-                { 
+                dataToUpdate,
+                {
                     where: { id },
-                    returning: true 
+                    returning: true,
                 }
             );
 
@@ -138,25 +195,29 @@ export class SecretService {
 
             return updatedSecrets[0];
         } catch (error) {
-            throw new Error(`Failed to update secret '${id}': ${error.message}`);
+            throw new Error(
+                `Failed to update secret '${id}': ${error.message}`
+            );
         }
     }
 
     /**
      * Deletes a secret by name
-     * @param {string} name - Secret name/identifier
+     * @param {string} id - Secret name/identifier
      * @returns {Promise<boolean>} True if deleted, false if not found
      */
-    async delete(name) {
-        if (!name || typeof name !== 'string' || name.trim() === '') {
-            throw new Error('Secret name cannot be empty');
+    async delete(id) {
+        if (!id || typeof id !== "string" || id.trim() === "") {
+            throw new Error("Secret name cannot be empty");
         }
 
         try {
-            const deletedCount = await Secret.destroy({ where: { name } });
+            const deletedCount = await Secret.destroy({ where: { id } });
             return deletedCount > 0;
         } catch (error) {
-            throw new Error(`Failed to delete secret '${name}': ${error.message}`);
+            throw new Error(
+                `Failed to delete secret '${id}': ${error.message}`
+            );
         }
     }
 
@@ -166,14 +227,16 @@ export class SecretService {
      */
     async list() {
         try {
-            const secrets = await Secret.findAll({ 
-                attributes: ['id', 'name', 'createdAt'],
-                order: [['name', 'ASC']]
+            const secrets = await Secret.findAll({
+                attributes: ["id", "name", "dekId", "lastRotation", "createdAt"],
+                order: [["name", "ASC"]],
             });
-            return secrets.map(s => ({
+            return secrets.map((s) => ({
                 id: s.id,
                 name: s.name,
-                createdAt: s.createdAt
+                dekId: s.dekId,
+                lastRotation: s.lastRotation,
+                createdAt: s.createdAt,
             }));
         } catch (error) {
             throw new Error(`Failed to list secrets: ${error.message}`);

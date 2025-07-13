@@ -1,30 +1,41 @@
 import { DataTypes } from "sequelize";
-import { v7 as uuidv7 } from 'uuid';
+import { v7 as uuidv7 } from "uuid";
 import { database } from "../data/database.js";
 
 export const Secret = database.define(
-    'Secret',
+    "Secret",
     {
         id: {
             type: DataTypes.UUID,
             defaultValue: () => uuidv7(),
-            primaryKey: true
+            primaryKey: true,
         },
         name: {
             type: DataTypes.STRING(100),
             allowNull: false,
             unique: true,
         },
+        lastRotation: {
+            type: DataTypes.DATE,
+            allowNull: true,
+            comment: "Data ultima rotazione DEK",
+        },
+        dekId: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 1,
+            comment: "Versione DEK usata per cifrare",
+        },
         data: {
             type: DataTypes.BLOB,
             allowNull: false,
-            comment: "Questi dati sono cifrati"
-        }
+            comment: "Questi dati sono cifrati",
+        },
     },
     {
-        tableName: 'secret',
+        tableName: "secret",
         timestamps: true,
-        charset: 'utf8mb4',
-        collate: 'utf8mb4_unicode_ci',
+        charset: "utf8mb4",
+        collate: "utf8mb4_unicode_ci",
     }
 );

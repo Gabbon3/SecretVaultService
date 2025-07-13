@@ -13,11 +13,15 @@ export class DEKService {
 
         const encryptedKey = await KeyManagementService.encryptDEK(rawKey);
 
-        return DEK.create({
+        const dek = await DEK.create({
             name,
             key: encryptedKey,
             kekId: Config.KMS.defaultKekId
         });
+
+        KeyManagementService.loadNewKey(dek.id, rawKey);
+
+        return dek;
     }
 
     /**
@@ -40,12 +44,45 @@ export class DEKService {
      * @returns {Promise<Array<DEK>>}
      */
     async getAllDeks(includeKeys = false) {
-        const queryOptions = includeKeys ? {} : { attributes: { exclude: ['key'] } };
+        let queryOptions = { order: [['id', 'DESC']] }
+        if (!includeKeys) {
+            queryOptions = {
+                ...queryOptions,
+                attributes: { exclude: ['key'] }
+            };
+        }
         const deks = await DEK.findAll(queryOptions);
 
         if (includeKeys) {
             for (const dek of deks) {
                 dek.key = await KeyManagementService.decryptDEK(dek.key)
+            }
+        }
+
+        return deks;
+    }
+
+    /**
+     * Gets all DEKs encrypted with a specific KEK
+     * @param {string} kekId - The KEK identifier
+     * @param {boolean} includeKeys - Whether to include decrypted keys
+     * @returns {Promise<Array<DEK>>}
+     */
+    async getDeksByKek(kekId, includeKeys = false) {
+        const queryOptions = {
+            where: { kekId },
+            order: [['id', 'DESC']]
+        };
+
+        if (!includeKeys) {
+            queryOptions.attributes = { exclude: ['key'] };
+        }
+
+        const deks = await DEK.findAll(queryOptions);
+
+        if (includeKeys) {
+            for (const dek of deks) {
+                dek.key = await KeyManagementService.decryptDEK(dek.key);
             }
         }
 

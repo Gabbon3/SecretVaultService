@@ -5,12 +5,13 @@
 ### 📍Indice:
 1. [Creazione Keyring](#creazione-keyring)
 2. [Creazione Key](#creazione-key)
-3. [Gestione Versioni](#gestione-versioni)
-4. [Rotazione e Cambio Versione Primaria](#rotazione-e-cambio-versione-primaria)
-5. [IAM Policy su Keys](#iam-policy-su-keys)
-6. [Cancellazione e Distruzione](#cancellazione-e-distruzione)
-7. [Migrazione Key / Cambio Nome](#migrazione-key--cambio-nome)
-8. [Best Practices e Accorgimenti](#best-practices-e-accorgimenti)
+3. [Elenco delle chiavi in un Keyring](#elenco-delle-chiavi-in-un-keyring)
+4. [Gestione Versioni](#gestione-versioni)
+5. [Rotazione e Cambio Versione Primaria](#rotazione-e-cambio-versione-primaria)
+6. [IAM Policy su Keys](#iam-policy-su-keys)
+7. [Cancellazione e Distruzione](#cancellazione-e-distruzione)
+8. [Migrazione Key / Cambio Nome](#migrazione-key--cambio-nome)
+9. [Best Practices e Accorgimenti](#best-practices-e-accorgimenti)
 
 
 [](#creazione-keyring)
@@ -37,6 +38,17 @@ gcloud kms keys create NOME_KEY --location=LOCATION --keyring=NOME_KEYRING --pur
 * Il nome è immutabile: valuta naming convenzioni (_env-app-purpose-v1_).
 * Purpose può essere `encryption` o `asymmetric-signing`, `asymmetric-encryption`.
 
+
+[](#elenco-delle-chiavi-in-un-keyring)
+## 🗂️ Elenco delle chiavi in un Keyring
+
+```bash
+gcloud kms keys list --location=LOCATION --keyring=NOME_KEYRING
+```
+📌 Note operative:
+* Mostra tutte le chiavi (symmetric e asymmetric) contenute nel keyring.
+* Include stato, tipo, algoritmo, se hanno rotazione automatica, ecc.
+* È utile per script che devono iterare sulle chiavi.
 
 [](#gestione-versioni)
 ## 🔁 Gestione Versioni

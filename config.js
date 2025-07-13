@@ -13,18 +13,19 @@ export class Config {
     static DB_PASSWORD = process.env.DB_PASSWORD;
     // Auth
     static JWT_SIGN_KEY = null;
-    // KMS
-    static KEK = null;
-    static DEK = null;
-    static DEKID = process.env.DEKID;
     // Google KMS
     static KMS = {
         projectId: process.env.GCLOUD_PROJECT_ID,
-        defaultKekId: 'default',
-        KEK1: {
-            locationId: 'global',
-            keyRingId: 'secretvault',
-            keyId: 'quickstart'
+        defaultKekId: process.env.KMS_KEK_ID,
+        kek1: {
+            locationId: process.env.GCLOUD_LOCATION_ID,
+            keyRingId: process.env.KMS_KEYRING_ID,
+            keyId: 'kek1'
+        },
+        kek2: {
+            locationId: process.env.GCLOUD_LOCATION_ID,
+            keyRingId: process.env.KMS_KEYRING_ID,
+            keyId: 'kek2'
         }
     };
 
@@ -43,12 +44,6 @@ export class Config {
             },
             false,
             ["sign", "verify"]
-        );
-        this.KEK = await AES256GCM.importKey(
-            HexEncoder.decode(process.env.KEK)
-        );
-        this.DEK = await AES256GCM.importKey(
-            HexEncoder.decode(process.env.DEK)
         );
     }
 }
