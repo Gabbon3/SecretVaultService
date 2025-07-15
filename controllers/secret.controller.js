@@ -20,10 +20,11 @@ export class SecretController {
     create = asyncHandler(async (req, res) => {
         SecretValidator.name(req.body.name);
         SecretValidator.value(req.body.value);
+        SecretValidator.folderId(req.body.folderId);
 
-        const { name, value } = req.body;
+        const { name, value, folderId = null } = req.body;
 
-        const secret = await this.service.create(name, value);
+        const secret = await this.service.create(name, value, folderId);
         res.status(201).json({
             id: secret.id,
             name: secret.name,
@@ -105,6 +106,23 @@ export class SecretController {
     list = asyncHandler(async (req, res) => {
         const secrets = await this.service.list();
         res.status(200).json(secrets);
+    });
+
+    /**
+     * Lists secrets in a folder
+     * @param {Object} req - Express request
+     * @param {Object} req.params - Request parameters
+     * @param {string} [req.params.folderId] - Folder ID (null for root)
+     * @param {Object} res - Express response
+     */
+    listFolder = asyncHandler(async (req, res) => {
+        Validator.of(req.params.folderId, "folderId")
+            .optional()
+            .uuid();
+
+        const folderId = req.params.folderId || null;
+        const secrets = await this.service.listFolder(folderId);
+        res.json(secrets);
     });
 
     /**

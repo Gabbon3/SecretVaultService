@@ -11,9 +11,12 @@ export const SecretValidator = {
     value: (value) =>
         Validator.of(value, 'value')
             .string()
-            .min(8)
-            .regex(/[A-Z]/)
-            .regex(/[0-9]/),
+            .min(8),
+    
+    folderId: (value) => 
+        Validator.of(value, 'folderId')
+        .optional()
+        .uuid(),
     
     identifier: (value) =>
         Validator.of(value, 'identifier')

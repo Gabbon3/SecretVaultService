@@ -1,17 +1,16 @@
 import express from 'express';
-import { SecretController } from '../controllers/secret.controller.js';
+import { FolderController } from '../controllers/folder.controller.js';
 import { Authorize } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
-const controller = new SecretController();
+const controller = new FolderController();
 
 router.use(Authorize());
 router.post('/', controller.create);
-router.get('/:identifier', controller.get);
+router.get('/:id/path', controller.getPath);
+router.get('/:id', controller.get);
 router.put('/:id', controller.update);
 router.delete('/:id', controller.delete);
 router.get('/', controller.list);
-router.get('/folder/:folderId', controller.listFolder);
-router.get('/:name/exists', controller.exists);
 
 export default router;

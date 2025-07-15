@@ -1,6 +1,7 @@
 import { KeyManagementService } from "../crypto/services/keyManagementService.js";
 import { SecretEncryptionService } from "../crypto/services/secretEncryptionService.js";
 import { ServerError } from "../helpers/serverError.js";
+import { Folder } from "../models/folder.js";
 import { Secret } from "../models/secret.js";
 
 export class SecretService {
@@ -8,16 +9,24 @@ export class SecretService {
      * Creates a new secret with encrypted data
      * @param {string} name - Secret name/identifier
      * @param {string|Uint8Array} plaintext - The secret data to encrypt (string or Uint8Array)
+     * @param {string|null} [folderId=null] - Folder ID where the secret belongs (null for root)
      * @returns {Promise<Secret>} The created secret record
      * @throws {Error} If encryption or database operation fails
      */
-    async create(name, plaintext) {
+    async create(name, plaintext, folderId = null) {
         if (!name || typeof name !== "string" || name.trim() === "") {
             throw new Error("Secret name cannot be empty");
         }
 
         if (!plaintext) {
             throw new Error("Plaintext data cannot be empty");
+        }
+
+        if (folderId) {
+            const folderExists = await Folder.findByPk(folderId)
+            if (!folderExists) {
+                throw new ServerError("Specified folder does not exist", 404);
+            }
         }
 
         // Convert string to Uint8Array if needed
@@ -35,6 +44,7 @@ export class SecretService {
                 name: name,
                 data: Buffer.from(encrypted),
                 dekId: KeyManagementService.defaultDekId,
+                folderId: folderId,
             });
 
             return secret;
@@ -92,6 +102,7 @@ export class SecretService {
                 name: secret.name,
                 data: decrypted,
                 dekId: secret.dekId,
+                folderId: secret.folderId,
                 createdAt: secret.createdAt,
                 updatedAt: secret.updatedAt,
             };
@@ -224,13 +235,38 @@ export class SecretService {
 
     /**
      * Lists all available secret names
-     * @returns {Promise<Array<{name: string, createdAt: Date}>>} List of secret metadata
+     * @returns {Promise<Array<{id: string, name: string, dekId: number, folderId: string, lastRotation: Date, createdAt: Date}>>} List of secret metadata
      */
     async list() {
         try {
             const secrets = await Secret.findAll({
-                attributes: ["id", "name", "dekId", "lastRotation", "createdAt"],
+                attributes: ["id", "name", "dekId", "folderId", "lastRotation", "createdAt"],
                 order: [["name", "ASC"]],
+            });
+            return secrets.map((s) => ({
+                id: s.id,
+                name: s.name,
+                dekId: s.dekId,
+                folderId: s.folderId,
+                lastRotation: s.lastRotation,
+                createdAt: s.createdAt,
+            }));
+        } catch (error) {
+            throw new Error(`Failed to list secrets: ${error.message}`);
+        }
+    }
+
+    /**
+     * Lists all secrets in a folder
+     * @param {string|null} [folderId=null] - Folder ID (null for root)
+     * @returns {Promise<Array<{id: string, name: string, dekId: number, lastRotation: Date, createdAt: Date}>>} List of secrets
+     */
+    async listFolder(folderId = null) {
+        try {
+            const secrets = await Secret.findAll({
+                where: { folderId },
+                order: [['name', 'ASC']],
+                attributes: { exclude: ['data'] }
             });
             return secrets.map((s) => ({
                 id: s.id,
@@ -240,7 +276,10 @@ export class SecretService {
                 createdAt: s.createdAt,
             }));
         } catch (error) {
-            throw new Error(`Failed to list secrets: ${error.message}`);
+            throw new ServerError(
+                `Failed to list secrets: ${error.message}`,
+                500
+            );
         }
     }
 }

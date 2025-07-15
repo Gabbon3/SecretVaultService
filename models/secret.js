@@ -26,6 +26,12 @@ export const Secret = database.define(
             defaultValue: 1,
             comment: "Versione DEK usata per cifrare",
         },
+        folderId: {
+            type: DataTypes.UUID,
+            allowNull: true,
+            defaultValue: null,
+            comment: "Se null allora fa parte della cartella root"
+        },
         data: {
             type: DataTypes.BLOB,
             allowNull: false,
