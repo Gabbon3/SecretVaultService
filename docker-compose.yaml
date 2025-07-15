@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+    db:
+        image: postgres:15-alpine
+        container_name: secret_vault_manager_db
+        environment:
+            POSTGRES_USER: tempadmin
+            POSTGRES_PASSWORD: temppassword
+            POSTGRES_DB: secret_vault_manager
+        volumes:
+            - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+            - secret_data:/var/lib/postgresql/data
+        ports:
+            - "5432:5432"
+        networks:
+            - secret_network
+
+    app:
+        build: .
+        container_name: secret_vault_manager
+        depends_on:
+            - db
+        environment:
+            DB_HOST: db
+            DB_PORT: 5432
+            DB_NAME: secret_vault_manager
+            DB_USER: tempadmin
+            DB_PASSWORD: temppassword
+            JWT_SIGN_KEY: dd2658ca115e6f7946386917a7ff54107708bb654165d879d75c52c612002726 # Change this key
+            KEK: 17685a27f2cb62178086ce87953b9f69bdbbe9a63cfa74448921d470f3e94e85 # This is only for dev
+            DEV: true # Change to false in production
+        ports:
+            - "3000:3000"
+        networks:
+            - secret_network
+
+volumes:
+    secret_data:
+
+networks:
+    secret_network:

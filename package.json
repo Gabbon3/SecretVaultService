@@ -3,7 +3,8 @@
     "version": "1.0.0",
     "main": "server.js",
     "scripts": {
-        "dev": "nodemon --inspect server.js"
+        "dev": "nodemon --inspect ./src/server.js",
+        "prod": "node ./src/server.js"
     },
     "type": "module",
     "keywords": [],
