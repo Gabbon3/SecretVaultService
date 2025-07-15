@@ -12,7 +12,7 @@ export const Client = database.define(
             comment: "Client ID"
         },
         name: {
-            type: DataTypes.STRING(200),
+            type: DataTypes.STRING(100),
             allowNull: false,
             unique: true,
             comment: "Client name"

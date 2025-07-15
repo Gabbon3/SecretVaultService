@@ -1,5 +1,5 @@
 # Fase di build
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ RUN npm ci --omit=dev
 COPY . .
 
 # Fase di runtime
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -19,6 +19,7 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/kms-config.js ./
 
 # Variabili d'ambiente di default
 ENV NODE_ENV=production

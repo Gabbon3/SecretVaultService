@@ -6,7 +6,6 @@ import { ServerError } from '../helpers/serverError.js';
 import { JWT } from '../auth/jsonwebtoken.js';
 
 export class ClientService {
-    static #jwtExpiresIn = '1h'; // 1 hour expiration for server-to-server tokens
 
     /**
      * Creates a new API client
@@ -45,17 +44,17 @@ export class ClientService {
 
     /**
      * Authenticates a client and generates a JWT
-     * @param {string} clientId - Client identifier
+     * @param {string} name - Client name
      * @param {string} secret - Client secret
      * @returns {Promise<{token: string, client: Client}>} JWT token and client info
      * @throws {ServerError} If authentication fails
      */
-    async authenticate(clientId, secret) {
-        if (!clientId || !secret) {
+    async authenticate(name, secret) {
+        if (!name || !secret) {
             throw new ServerError('Id and secret are required', 400);
         }
 
-        const client = await Client.findOne({ where: { id: clientId } });
+        const client = await Client.findOne({ where: { name: name } });
         if (!client || !client.isActive) {
             throw new ServerError('Invalid client credentials', 401);
         }
@@ -80,7 +79,7 @@ export class ClientService {
                 permissions: client.permissions.split(',').filter(p => p)
             },
             Config.JWT_SIGN_KEY,
-            ClientService.#jwtExpiresIn
+            Config.JWT_LIFETIME,
         );
 
         return {

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { HexEncoder } from "./utils/encoders/hex.js";
 import { AES256GCM } from "./crypto/symmetric/aes256gcm.js";
+import { kmsConfig } from '../kms-config.js';
 
 export class Config {
     static initialized = false;
@@ -15,20 +16,11 @@ export class Config {
     static DB_PASSWORD = process.env.DB_PASSWORD;
     // Auth
     static JWT_SIGN_KEY = null;
+    static JWT_LIFETIME = process.env.JWT_LIFETIME;
     // Google KMS
     static KMS = {
-        projectId: process.env.GCLOUD_PROJECT_ID,
-        defaultKekId: process.env.KMS_KEK_ID,
-        kek1: {
-            locationId: process.env.GCLOUD_LOCATION_ID,
-            keyRingId: process.env.KMS_KEYRING_ID,
-            keyId: 'kek1'
-        },
-        kek2: {
-            locationId: process.env.GCLOUD_LOCATION_ID,
-            keyRingId: process.env.KMS_KEYRING_ID,
-            keyId: 'kek2'
-        }
+        ...kmsConfig,
+        projectId: process.env.GCLOUD_PROJECT_ID
     };
 
     /**

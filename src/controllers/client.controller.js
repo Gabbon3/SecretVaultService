@@ -2,6 +2,7 @@ import { asyncHandler } from "../helpers/asyncHandler.js";
 import { ClientService } from "../services/client.service.js";
 import { ServerError } from "../helpers/serverError.js";
 import { Validator } from "../validator/validator.js";
+import { Config } from "../config.js";
 
 export class ClientController {
     constructor() {
@@ -57,22 +58,22 @@ export class ClientController {
      * Authenticates a client and returns a JWT
      * @param {Object} req - Express request
      * @param {Object} req.body - Request body
-     * @param {string} req.body.clientId - Client ID
+     * @param {string} req.body.name - Client name
      * @param {string} req.body.secret - Client secret
      * @param {Object} res - Express response
      */
     login = asyncHandler(async (req, res) => {
-        Validator.of(req.body.clientId, "clientId").uuid();
+        Validator.of(req.body.name, "name").string().max(100);
         Validator.of(req.body.secret, "secret").string().max(100);
 
-        const { clientId, secret } = req.body;
+        const { name, secret } = req.body;
 
-        if (!clientId || !secret) {
+        if (!name || !secret) {
             throw new ServerError("Client ID and secret are required", 400);
         }
 
         const { token, client } = await this.service.authenticate(
-            clientId,
+            name,
             secret
         );
 
@@ -85,7 +86,7 @@ export class ClientController {
                 permissions: client.permissions.split(",").filter((p) => p),
                 createdAt: client.createdAt,
             },
-            expiresIn: "1h",
+            expiresIn: Config.JWT_LIFETIME,
         });
     });
 

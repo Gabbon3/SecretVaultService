@@ -32,7 +32,7 @@ COMMENT ON COLUMN public.client."lastUsedAt" IS 'Last time the client was used';
 
 -- password is '0000'
 INSERT INTO client (id, "name", "hashedSecret", "isActive", roles, permissions, "lastUsedAt", "createdAt", "updatedAt") 
-VALUES('00000000-0000-0000-0000-000000000000', 'admin', '$argon2id$v=19$m=65536,t=3,p=4$dnMTWlA3YF24/ZU0z0QmWQ$yvwLQqGLzhtGzpocaJD9FyNSR0ywhb8L1z66NhxlqxQ', true, '*', '*', null, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES('01980e47-4894-714c-ad07-d15cb61d6bd1', 'root', '$argon2id$v=19$m=65536,t=3,p=4$dnMTWlA3YF24/ZU0z0QmWQ$yvwLQqGLzhtGzpocaJD9FyNSR0ywhb8L1z66NhxlqxQ', true, '*', '*', null, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- public.dek definition
 
