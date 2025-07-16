@@ -12,7 +12,7 @@ export class DEKController {
     /**
      * Creates a new Data Encryption Key (DEK)
      * @param {Object} req - Express request
-     * @param {string} req.body.name - Unique key identifier
+     * @param {string} req.body.name - Dek name, must be unique
      * @param {Object} res - Express response
      */
     create = asyncHandler(async (req, res) => {
