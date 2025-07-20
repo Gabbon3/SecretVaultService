@@ -109,7 +109,7 @@ export class Validator {
     number(min = null, max = null) {
         if (this.skipValidation) return this;
         this.value = Number(this.value)
-        if (typeof this.value !== "number" && isNaN(this.value)) {
+        if (typeof this.value !== "number" || isNaN(this.value)) {
             throw new ServerError(`${this.fieldName} must be a number`, 400);
         }
         if (min && this.value < min) {
