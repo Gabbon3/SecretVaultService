@@ -97,16 +97,26 @@ export class Validator {
 
     /**
      * Validates the value is a number
+     * @param {number} [min=null] - min value
+     * @param {number} [max=null] - max value 
      * @returns {this}
      * @throws {ServerError} If validation fails
      * @example
      * Validator.of("Hi").number(); // Throws "value must be a number"
+     * Validator.of(5).number(6); // Throws "value must be greater than 6"
+     * Validator.of(11).number(0, 10); // Throws "value must be lower than 10"
      */
-    number() {
+    number(min = null, max = null) {
         if (this.skipValidation) return this;
         this.value = Number(this.value)
         if (typeof this.value !== "number" && isNaN(this.value)) {
             throw new ServerError(`${this.fieldName} must be a number`, 400);
+        }
+        if (min && this.value < min) {
+            throw new ServerError(`${this.fieldName} must be greater than ${min}`, 400);
+        }
+        if (max && this.value > max) {
+            throw new ServerError(`${this.fieldName} must be lower than ${min}`, 400);
         }
         return this;
     }
