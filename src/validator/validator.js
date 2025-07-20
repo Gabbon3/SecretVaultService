@@ -113,10 +113,10 @@ export class Validator {
             throw new ServerError(`${this.fieldName} must be a number`, 400);
         }
         if (min && this.value < min) {
-            throw new ServerError(`${this.fieldName} must be greater than ${min}`, 400);
+            throw new ServerError(`${this.fieldName} must be greater or equal than ${min}`, 400);
         }
         if (max && this.value > max) {
-            throw new ServerError(`${this.fieldName} must be lower than ${min}`, 400);
+            throw new ServerError(`${this.fieldName} must be lower or equal than ${max}`, 400);
         }
         return this;
     }
